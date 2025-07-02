@@ -24,7 +24,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: process.env.CLIENT_URL || 'http://localhost:5175',
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -84,24 +84,11 @@ const initializeDefaultRoom = async () => {
   try {
     const generalRoom = await Room.findOne({ name: 'General' });
     if (!generalRoom) {
-      // Create or find system user for the default room
-      let systemUser = await User.findOne({ username: 'System' });
-      if (!systemUser) {
-        systemUser = await User.create({
-          username: 'System',
-          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=System',
-          isOnline: false,
-          status: 'offline' // Use valid enum value
-        });
-      }
-
       await Room.create({
         name: 'General',
         description: 'Default chat room for everyone',
         type: 'public',
-        createdBy: systemUser._id,
-        members: [], // Start with empty members, users will be added when they join
-        admins: [systemUser._id]
+        createdBy: null
       });
       console.log('✅ Default "General" room created');
     }
@@ -499,22 +486,14 @@ io.on('connection', (socket) => {
   });
 });
 
-// API routes
-app.get('/api/messages', (req, res) => {
-  res.json(messages);
-});
-
-app.get('/api/users', (req, res) => {
-  res.json(Object.values(users));
-});
-
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date(),
     connectedUsers: Object.keys(users).length,
-    totalMessages: messages.length
+    totalMessages: messages.length,
+    database: isDBConnected ? 'MongoDB' : 'In-Memory'
   });
 });
 
@@ -614,27 +593,26 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// Root route
-app.get('/', (req, res) => {
-  res.send('Socket.io Chat Server is running');
-});
+const PORT = process.env.PORT || 5001;
 
-// Start server
-const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📱 WhatsApp-style Chat Server is ready!`);
   console.log(`🌐 Health check: http://localhost:${PORT}/health`);
   console.log(`📊 Stats endpoint: http://localhost:${PORT}/stats`);
-  console.log(`👥 Users endpoint: http://localhost:${PORT}/api/users`);
-  console.log(`💬 Chat history: http://localhost:${PORT}/api/messages`);
+  console.log(`📚 API endpoints:`);
+  console.log(`  - GET /api/messages/:room - Get chat history`);
+  console.log(`  - GET /api/users - Get user list`);
+  console.log(`  - POST /upload - Upload files`);
   
-  if (isDBConnected) {
-    console.log(`💾 Database: MongoDB (persistent storage)`);
-  } else {
-    console.log(`⚠️  Database: In-Memory (data will be lost on restart)`);
-    console.log(`💡 To use MongoDB: Start MongoDB service and check MONGODB_URI in .env`);
-  }
+  setTimeout(() => {
+    if (isDBConnected) {
+      console.log(`💾 Database: MongoDB (persistent storage)`);
+    } else {
+      console.log(`⚠️  Database: In-Memory (data will be lost on restart)`);
+      console.log(`💡 To use MongoDB: Start MongoDB service and check MONGODB_URI in .env`);
+    }
+  }, 1000);
 });
 
 module.exports = { app, server, io };
